@@ -8,7 +8,10 @@
 import { handleAuth } from "./routes/auth.js";
 import { handleHealth } from "./routes/health.js";
 import { handleInvoices } from "./routes/invoices.js";
+import { handlePayments } from "./routes/payments.js";
+import { handleCatalog } from "./routes/catalog.js";
 import { requireUser, requireAdmin } from "./lib/auth.js";
+import { runRecurringCron } from "./lib/recurring.js";
 
 const COOKIE = (env) => env.SESSION_COOKIE || "portal_session";
 
@@ -24,8 +27,17 @@ export default {
       if (pathname === "/api/health") return cors(json(await handleHealth(env)));
       if (pathname.startsWith("/api/auth")) return cors(await handleAuth(request, env));
       if (pathname.startsWith("/api/admin/")) return cors(await handleAdmin(request, env, pathname));
+      // T4 (WS2): order + layanan client — SEBELUM catch-all /api/client/ milik T3
+      // (handleClient lama mengembalikan 404 untuk path yang tak dikenalnya).
+      if (pathname.startsWith("/api/client/orders") || pathname.startsWith("/api/client/services")) {
+        return cors(await handleCatalog(request, env));
+      }
       if (pathname.startsWith("/api/client/")) return cors(await handleClient(request, env, pathname));
       if (pathname.startsWith("/api/invoices")) return cors(await handleInvoices(request, env));
+      // T4 (WS2): katalog produk (guard session di routes/catalog.js).
+      if (pathname === "/api/catalog" || pathname.startsWith("/api/catalog/")) {
+        return cors(await handleCatalog(request, env));
+      }
 
       // Placeholder endpoint lain (T6-T8 implementasi penuh; T5 invoice selesai)
       if (pathname.startsWith("/api/")) {
@@ -38,11 +50,23 @@ export default {
     }
   },
 
-  // Cron trigger: T8 isi logika invoice berulang + reminder.
+  // Cron trigger T8 (lihat wrangler.toml: `0 1 * * *` 1x/hari):
+  // sweep overdue -> terbitkan perpanjangan langganan jatuh tempo
+  // (anti-duplikat) -> reminder + audit. Logika di lib/recurring.js.
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
-      console.log(`[cron] tick at ${new Date(event.scheduledTime).toISOString()} cron=${event.cron}`);
-      // T8: query D1 invoice jatuh tempo -> generate invoice baru + reminder.
+      const at = new Date(event.scheduledTime);
+      console.log(`[cron] tick at ${at.toISOString()} cron=${event.cron}`);
+      if (!env.DB) {
+        console.log("[cron] DB binding hilang, lewati jalan ini.");
+        return;
+      }
+      try {
+        const r = await runRecurringCron(env.DB, { now: at, dryRun: false, cron: event.cron });
+        console.log(`[cron] selesai: ${r.summary}`);
+      } catch (err) {
+        console.error("[cron] gagal:", err && err.message ? err.message : err);
+      }
     })());
   },
 };

@@ -21,6 +21,7 @@ import {
   formatTanggal,
   err,
 } from "../lib/invoices.js";
+import { runRecurringCron } from "../lib/recurring.js";
 
 async function needLogin(request, env) {
   const caller = await getSessionUser(request, env);
@@ -122,6 +123,32 @@ export async function handleInvoices(request, env) {
       void admin;
       const changed = await sweepOverdue(db);
       return json({ ok: true, overdue: changed });
+    }
+
+    // POST /api/invoices/cron-run — jalan cron manual (admin saja; T8, QA T9).
+    //   ?dryRun=1 (default) -> rencana saja, TANPA tulis (sesuai acceptance:
+    //   "dry-run log benar"). ?dryRun=0 -> jalan asli: terbitkan invoice
+    //   perpanjangan + sweep + reminder + audit (sama seperti scheduled).
+    if (seg.length === 3 && seg[2] === "cron-run" && method === "POST") {
+      const admin = await needAdmin(request, env);
+      const dry = url.searchParams.get("dryRun");
+      const dryRun = dry == null || !["0", "false", "no"].includes(String(dry).toLowerCase());
+      const r = await runRecurringCron(db, { dryRun, ip: clientIp(request) || "admin-cron-run" });
+      return json(
+        {
+          ok: true,
+          at: r.at,
+          cron: r.cron,
+          dryRun: r.dryRun,
+          swept: r.swept,
+          issued: r.issued,
+          skipped: r.skipped,
+          reminders: r.reminders,
+          remindedCount: r.remindedCount,
+          summary: r.summary,
+        },
+        200
+      );
     }
 
     // GET /api/invoices — riwayat/daftar (client: miliknya; admin: semua/filter userId)

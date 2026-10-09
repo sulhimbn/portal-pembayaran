@@ -160,6 +160,30 @@ dari `worker/src/lib/invoices.js` — JANGAN tandai via SQL mentah agar
 transisi + audit + `paid_at` konsisten. Untuk T8 (cron): pakai
 `createInvoice()` + `sweepOverdue()` dari lib yang sama.
 
+## Cron invoice berulang + reminder (T8)
+
+Trigger: `wrangler.toml` `[triggers] crons = ["0 1 * * *"]` (1x/hari,
+cukup di free-tier). Handler `scheduled()` di `worker/src/index.js`
+menjalankan `runRecurringCron()` dari `worker/src/lib/recurring.js`:
+
+  1. Sweep: invoice `unpaid` lewat jatuh tempo -> `overdue` (idempotent).
+  2. Perpanjangan: invoice langganan LUNAS (`monthly`/`yearly`, tertaut
+     order) yang periodenya habis (`issued_at` + 1 bulan/tahun kalender
+     <= hari ini) -> terbitkan invoice baru via `issueFromOrder()`.
+     Anti-duplikat: order ber-invoice terbuka / berstatus `cancelled` /
+     periode `once` dilewati; nomor unik via constraint UNIQUE.
+  3. Reminder: invoice belum lunas jatuh tempo <= 3 hari -> audit
+     `invoice.reminder` sekali per invoice per hari (anti spam).
+  4. Ringkasan jalan diaudit sebagai `invoice.cron_run`.
+
+Manual/QA (admin saja, dipakai T9):
+
+  POST /api/invoices/cron-run            dry-run (rencana saja, TANPA tulis)
+  POST /api/invoices/cron-run?dryRun=0   jalan asli (sama seperti scheduled)
+
+Respons: `{ ok, dryRun, swept, issued[], skipped[], reminders[],
+remindedCount, summary }` — `summary` satu baris untuk wrangler logs.
+
 ## Status scaffold (T1)
 
 - [x] Struktur folder + wrangler (D1/R2/Cron) + frontend Vite + proxy
@@ -167,6 +191,7 @@ transisi + audit + `paid_at` konsisten. Untuk T8 (cron): pakai
 - [x] T2: skema D1 penuh + seed produk (0002 + seeds/seed_products.sql)
 - [x] T3: auth DB + RBAC (PBKDF2 + session DB + guard /client /admin)
 - [x] T5: invoice engine + cetak/PDF (lib + /api/invoices + /invoices/)
+- [x] T8: cron invoice berulang + reminder + audit (recurring.js + scheduled + /cron-run + 12 test)
 
 ## Batas free-tier (ringkas)
 
