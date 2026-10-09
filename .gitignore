@@ -1,6 +1,12 @@
 node_modules/
 frontend/dist/
+worker/dist/
 .wrangler/
 .dev.vars
+.env
+.env.*
 *.log
+coverage/
+*.sqlite
+*.sqlite-*
 .DS_Store
