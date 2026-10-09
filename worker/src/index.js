@@ -33,7 +33,15 @@ export default {
         return cors(await handleCatalog(request, env));
       }
       if (pathname.startsWith("/api/client/")) return cors(await handleClient(request, env, pathname));
+      // T6 (WS3): halaman bayar HTML — SEBELUM /api/invoices (handleInvoices tak kenal /:id/pay).
+      if (request.method === "GET" && /^\/api\/invoices\/\d+\/pay$/.test(pathname)) {
+        return cors(await handlePayments(request, env));
+      }
       if (pathname.startsWith("/api/invoices")) return cors(await handleInvoices(request, env));
+      // T6 (WS3): pembayaran QRIS + webhook (guard + verifikasi signature di routes/payments.js).
+      if (pathname.startsWith("/api/payments") || pathname.startsWith("/api/webhooks")) {
+        return cors(await handlePayments(request, env));
+      }
       // T4 (WS2): katalog produk (guard session di routes/catalog.js).
       if (pathname === "/api/catalog" || pathname.startsWith("/api/catalog/")) {
         return cors(await handleCatalog(request, env));

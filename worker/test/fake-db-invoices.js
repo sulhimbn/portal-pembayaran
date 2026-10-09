@@ -15,7 +15,9 @@ export class InvoiceFakeDB {
     this.invoices = [];
     this.invoice_items = [];
     this.audit_logs = [];
-    this._seq = { user: 1, product: 1, order: 1, service: 1, invoice: 1, item: 1, audit: 1 };
+    this.payments = [];
+    this.webhook_events = [];
+    this._seq = { user: 1, product: 1, order: 1, service: 1, invoice: 1, item: 1, audit: 1, payment: 1, webhook: 1 };
   }
 
   addUser({ email, name = "User", role = "client", status = "active" }) {
@@ -138,6 +140,32 @@ export class InvoiceFakeDB {
       const u = this.users.find((x) => x.id === p[0]);
       return u ? { name: u.name, email: u.email } : null;
     }
+    // payment by provider_ref (T6)
+    if (low.includes("from payments where provider_ref =")) {
+      return this.payments.find((r) => r.provider_ref === p[0]) || null;
+    }
+    // payment by id (T6)
+    if (low.includes("from payments where id =")) {
+      const row = this.payments.find((r) => r.id === p[0]);
+      if (!row) return null;
+      if (low.includes("raw_callback_json") && !low.includes(",")) return { raw_callback_json: row.raw_callback_json };
+      return row;
+    }
+    // latest payment per invoice (T6: ORDER BY id DESC)
+    if (low.includes("from payments where invoice_id =")) {
+      const rows = this.payments.filter((r) => r.invoice_id === p[0]).sort((a, b) => b.id - a.id);
+      return rows[0] || null;
+    }
+    // payment lookup ringan: invoice_id + user_id by ref (T6 simulate)
+    if (low.includes("select invoice_id, user_id from payments where provider_ref")) {
+      const row = this.payments.find((r) => r.provider_ref === p[0]);
+      return row ? { invoice_id: row.invoice_id, user_id: row.user_id } : null;
+    }
+    // order by id ringan (T6 settle: update status paid)
+    if (low.includes("select id, status, user_id from orders where id")) {
+      const o = this.orders.find((x) => x.id === p[0]);
+      return o ? { id: o.id, status: o.status, user_id: o.user_id } : null;
+    }
     // session lookup (T3)
     if (low.includes("from sessions where token_hash")) {
       return this.sessions.find((s) => s.token_hash === p[0]) || null;
@@ -226,7 +254,8 @@ export class InvoiceFakeDB {
       const rows = this.invoice_items.filter((r) => r.invoice_id === p[0]).sort((a, b) => a.id - b.id);
       return { results: rows };
     }
-    // audit history list
+    // audit history list (T6: entity payment juga dipakai settlePayment via auditPayment;
+    // history invoice tetap difilter entity=invoice agar T5 tak berubah)
     if (low.includes("from audit_logs where entity")) {
       const limit = Number(p[1]) || 50;
       const rows = this.audit_logs
@@ -313,6 +342,63 @@ export class InvoiceFakeDB {
         }
       }
       return { success: true, meta: { changes } };
+    }
+    // INSERT payments (T6: 10 kolom)
+    if (low.startsWith("insert into payments")) {
+      const [invoice_id, user_id, provider, provider_ref, qr_payload, amount_idr, fee_idr, status, expires_at, raw_callback_json] = p;
+      if (provider_ref && this.payments.some((r) => r.provider_ref === provider_ref)) {
+        throw new Error("UNIQUE constraint failed: payments.provider_ref");
+      }
+      const id = this._seq.payment++;
+      const now = new Date().toISOString();
+      this.payments.push({
+        id, invoice_id, user_id, provider, provider_ref, qr_payload, amount_idr, fee_idr,
+        status, expires_at, paid_at: null, raw_callback_json,
+        created_at: now, updated_at: now,
+      });
+      return { success: true, meta: { last_row_id: id } };
+    }
+    // INSERT webhook_events (T6 idempotency: UNIQUE provider+event_id)
+    if (low.startsWith("insert into webhook_events")) {
+      const [provider, event_id, payment_ref, raw_json] = p;
+      if (this.webhook_events.some((r) => r.provider === provider && r.event_id === event_id)) {
+        throw new Error("UNIQUE constraint failed: webhook_events.provider, webhook_events.event_id");
+      }
+      const id = this._seq.webhook++;
+      this.webhook_events.push({ id, provider, event_id, payment_ref, raw_json, created_at: new Date().toISOString() });
+      return { success: true, meta: { last_row_id: id } };
+    }
+    // UPDATE payments -> paid/expired/failed (T6 settle)
+    if (low.startsWith("update payments set status = ?")) {
+      const [to, paid_at, raw, updated_at, id] = p;
+      const r = this.payments.find((x) => x.id === id);
+      if (r) {
+        r.status = to;
+        r.paid_at = paid_at;
+        r.raw_callback_json = raw;
+        r.updated_at = updated_at;
+      }
+      return { success: true, meta: { changes: r ? 1 : 0 } };
+    }
+    // UPDATE payments kedaluwarsa saat dibaca (T6 GET status)
+    if (low.startsWith("update payments set status = ?, updated_at = ?")) {
+      const [to, updated_at, id] = p;
+      const r = this.payments.find((x) => x.id === id);
+      if (r) {
+        r.status = to;
+        r.updated_at = updated_at;
+      }
+      return { success: true, meta: { changes: r ? 1 : 0 } };
+    }
+    // UPDATE orders -> paid (T6 settle auto-lunas order)
+    if (low.startsWith("update orders set status = ?")) {
+      const [to, updated_at, id] = p;
+      const o = this.orders.find((x) => x.id === id);
+      if (o) {
+        o.status = to;
+        o.updated_at = updated_at;
+      }
+      return { success: true, meta: { changes: o ? 1 : 0 } };
     }
     // sessions insert (loginAs langsung, tak lewat SQL) + DELETE expired (T3) — no-op aman
     if (low.startsWith("delete from sessions")) {

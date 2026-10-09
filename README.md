@@ -160,6 +160,60 @@ dari `worker/src/lib/invoices.js` — JANGAN tandai via SQL mentah agar
 transisi + audit + `paid_at` konsisten. Untuk T8 (cron): pakai
 `createInvoice()` + `sweepOverdue()` dari lib yang sama.
 
+## Pembayaran QRIS + webhook auto-lunas (T6)
+
+Adapter: `worker/src/lib/payments.js` — `simulated` (tanpa key, QR
+`QRIS-SIM:<ref>:<nominal>`, TTL 30 mnt) | `xendit` (QR Code API
+`api.xendit.co/qr_codes`, callback `x-callback-token`) | `midtrans`
+(Core API charge QRIS, notifikasi signature SHA-512
+`order_id+status_code+gross_amount+ServerKey`). Pilih via
+`QRIS_PROVIDER` (default `simulated`); tanpa key, adapter real
+menolak dengan `PROVIDER_KEY_MISSING` (tetap aman di dev).
+
+API (auth session T3 — client: miliknya, admin: semua; webhook publik
+dengan verifikasi signature):
+
+  POST /api/payments {invoiceId}   buat QR (QR hidup dipakai ulang) / 201
+  GET  /api/payments/:ref          cek status bayar
+  GET  /api/payments/by-invoice/:id payment terbaru satu invoice
+  POST /api/payments/simulate {ref} simulasi lunas sandbox (login wajib,
+                                   hanya bila QRIS_PROVIDER=simulated)
+  GET  /api/invoices/:id/pay       halaman bayar HTML: QR + countdown +
+                                   cek status tiap 5 dtk + tombol sandbox
+  POST /api/webhooks/xendit        callback Xendit -> auto-lunas
+  POST /api/webhooks/midtrans      notifikasi Midtrans -> auto-lunas
+  POST /api/webhooks/simulated     webhook sandbox (X-Webhook-Secret)
+
+Webhook idempotent dua lapis: `webhook_events` UNIQUE(provider,
+event_id) -> replay jawab `{duplicate:true}` tanpa efek ganda; invoice
+yang sudah lunas tidak di-mark ulang. Nominal tak cocok -> 409,
+signature salah -> 401, ref tak dikenal -> 404. Saat lunas: payment
+paid + invoice paid (via `markInvoicePaid`) + order terkait paid +
+audit `payment.paid`/`invoice.paid` + payload mentah tersimpan di
+`raw_callback_json`. Migrasi: `migrations/0003_payments_webhook.sql`.
+
+Frontend: tombol "Bayar QRIS" di `/invoices/` (hanya unpaid/overdue);
+QR digambar lokal via `frontend/public/vendor-qrcode.min.js` (tanpa
+CDN, ramah offline/CSP).
+
+Secrets produksi (`wrangler secret put`, JANGAN commit): `XENDIT_API_KEY`
++ `XENDIT_CALLBACK_TOKEN` (bila xendit), `MIDTRANS_SERVER_KEY` (bila
+midtrans), `WEBHOOK_SECRET` (disarankan; fallback `SESSION_SECRET`
+hanya dev).
+
+Uji manual (sandbox, D1 lokal):
+
+  1. Client order -> `POST /api/invoices {orderId}` -> `POST
+     /api/payments {invoiceId}` -> `qr_payload: QRIS-SIM:<ref>:<total>`.
+  2. Buka `GET /api/invoices/:id/pay` -> QR + countdown + cek status.
+  3. `POST /api/webhooks/simulated` (header `X-Webhook-Secret`) ->
+     invoice `paid`, payment `paid`, log `payment.paid` tersimpan.
+  4. Kirim webhook sama lagi -> `duplicate:true`, audit tak bertambah.
+
+Otomatis: `npm test --workspace=worker` (+12 test T6: charge sandbox,
+auto-lunas + log, replay idempotent, signature/nominal/ref, halaman
+bayar, reuse QR + 409, simulate, RBAC, unit adapter/normalisasi).
+
 ## Cron invoice berulang + reminder (T8)
 
 Trigger: `wrangler.toml` `[triggers] crons = ["0 1 * * *"]` (1x/hari,
@@ -191,6 +245,7 @@ remindedCount, summary }` — `summary` satu baris untuk wrangler logs.
 - [x] T2: skema D1 penuh + seed produk (0002 + seeds/seed_products.sql)
 - [x] T3: auth DB + RBAC (PBKDF2 + session DB + guard /client /admin)
 - [x] T5: invoice engine + cetak/PDF (lib + /api/invoices + /invoices/)
+- [x] T6: QRIS Xendit/Midtrans + webhook auto-lunas + halaman bayar (payments.js + /api/payments + /api/webhooks/* + /:id/pay + 12 test)
 - [x] T8: cron invoice berulang + reminder + audit (recurring.js + scheduled + /cron-run + 12 test)
 
 ## Batas free-tier (ringkas)

@@ -72,6 +72,14 @@ async function muat(filter = "") {
     tr.children[0].textContent = inv.number;
     const td = document.createElement("td");
     td.appendChild(b);
+    // T6: tombol Bayar QRIS untuk invoice yang masih bisa dibayar.
+    if (inv.status === "unpaid" || inv.status === "overdue") {
+      const bayar = document.createElement("button");
+      bayar.textContent = "Bayar QRIS";
+      bayar.style.marginLeft = "8px";
+      bayar.addEventListener("click", () => window.open(`/api/invoices/${inv.id}/pay`, "_blank", "noopener"));
+      td.appendChild(bayar);
+    }
     tr.appendChild(td);
     tb.appendChild(tr);
   }
