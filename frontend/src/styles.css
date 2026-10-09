@@ -15,3 +15,14 @@ form label { display: grid; gap: 4px; }
 input { padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; margin-left: 8px; }
 pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow: auto; }
 .hint { color: #6b7280; font-size: 13px; }
+/* T5: tabel riwayat invoice + badge status */
+table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px; }
+th, td { border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; }
+th { background: #f9fafb; }
+td.r, th.r { text-align: right; }
+select { padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; }
+.pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; color: #fff; background: #6b7280; }
+.pill.unpaid { background: #92400e; }
+.pill.paid { background: #065f46; }
+.pill.overdue { background: #b91c1c; }
+.pill.cancelled { background: #6b7280; }

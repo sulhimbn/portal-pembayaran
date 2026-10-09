@@ -117,12 +117,56 @@ Uji manual RBAC:
 
 Otomatis: `npm test --workspace=worker` (11 test: auth, RBAC, scoping, reset).
 
+## Invoice engine + cetak/PDF (T5)
+
+Engine: `worker/src/lib/invoices.js` — nomor unik `INV/YYYY/MM/NNNN`,
+langganan once/monthly/yearly (periode ikut produk), status
+unpaid/paid/overdue/cancelled dengan transisi dijaga, PPN 11% default
+(tanpa float, semua INTEGER rupiah), riwayat via `audit_logs`.
+
+API (`/api/invoices`, auth session T3 — client: miliknya, admin: semua):
+
+  POST /api/invoices {orderId}       terbit dari order/langganan (client atas
+                                     miliknya, admin atas apa pun)
+  POST /api/invoices {userId,items}  invoice manual multi-item (admin saja)
+  GET  /api/invoices[?status][?userId(admin)]   daftar/riwayat
+  GET  /api/invoices/:id             detail + items + riwayat
+  GET  /api/invoices/:id/print       halaman cetak/PDF (HTML siap print,
+                                     tombol Cetak -> Save as PDF)
+  POST /api/invoices/:id/pay         tandai lunas manual (admin; T6 webhook
+                                     memakai `markInvoicePaid()` langsung)
+  POST /api/invoices/:id/cancel      batalkan (pemilik/admin)
+  POST /api/invoices/sweep           tandai overdue (admin; dipakai cron T8
+                                     via `sweepOverdue()`, idempotent)
+
+Frontend: halaman `/invoices/` (daftar + filter status + tombol Cetak/PDF
+per invoice), ditautkan dari Area Client; build multipage Vite
+(entri `main` + `invoices` — T4/T7 menambah `/client/`, `/admin/`).
+Cetak rapi: kop + badge status + tabel rincian + subtotal/pajak/total (Rp).
+
+Uji manual:
+
+  1. Client order produk monthly -> `POST /api/invoices {orderId}` ->
+     nomor `INV/...`, `total = amount + round(amount*0.11)`.
+  2. `GET /api/invoices/1/print` -> HTML ada nomor + total + window.print.
+  3. Admin `POST /:id/pay` -> paid; client pay -> 403; paid -> cancel 409.
+  4. Client lain `GET /:id` -> 403; anon -> 401.
+
+Otomatis: `npm test --workspace=worker` (+9 test T5: total/pajak, terbit
+once/monthly/yearly, lifecycle, scoping, print, invoice manual admin).
+
+Untuk T6 (webhook): panggil `markInvoicePaid(db, id, {actorUserId, ip})`
+dari `worker/src/lib/invoices.js` — JANGAN tandai via SQL mentah agar
+transisi + audit + `paid_at` konsisten. Untuk T8 (cron): pakai
+`createInvoice()` + `sweepOverdue()` dari lib yang sama.
+
 ## Status scaffold (T1)
 
 - [x] Struktur folder + wrangler (D1/R2/Cron) + frontend Vite + proxy
 - [x] Cron handler terdaftar (logika invoice di T8)
 - [x] T2: skema D1 penuh + seed produk (0002 + seeds/seed_products.sql)
 - [x] T3: auth DB + RBAC (PBKDF2 + session DB + guard /client /admin)
+- [x] T5: invoice engine + cetak/PDF (lib + /api/invoices + /invoices/)
 
 ## Batas free-tier (ringkas)
 

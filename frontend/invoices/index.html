@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Invoice Saya — Portal Pembayaran QRIS</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Invoice Saya</h1>
+      <nav><a href="/" style="color:#fff">← Beranda</a></nav>
+    </header>
+    <main>
+      <section class="card">
+        <h2>Riwayat Invoice</h2>
+        <p class="hint" id="ringkas">Memuat…</p>
+        <label>Status
+          <select id="filter">
+            <option value="">Semua</option>
+            <option value="unpaid">Belum Bayar</option>
+            <option value="paid">Lunas</option>
+            <option value="overdue">Jatuh Tempo</option>
+            <option value="cancelled">Dibatalkan</option>
+          </select>
+        </label>
+        <div id="daftar"><p>Memuat…</p></div>
+        <p class="hint">Tombol "Cetak / PDF" membuka halaman cetak tiap invoice — gunakan fungsi Cetak browser lalu pilih "Save as PDF".</p>
+      </section>
+    </main>
+    <script type="module" src="/src/invoices.js"></script>
+  </body>
+</html>

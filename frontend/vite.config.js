@@ -1,4 +1,8 @@
 import { defineConfig } from "vite";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   server: {
@@ -10,4 +14,14 @@ export default defineConfig({
     },
   },
   preview: { port: 4173 },
+  build: {
+    rollupOptions: {
+      // Multipage: beranda + halaman invoice client (T5).
+      // T4 (/client/) dan T7 (/admin/) menambah entry di sini.
+      input: {
+        main: resolve(root, "index.html"),
+        invoices: resolve(root, "invoices/index.html"),
+      },
+    },
+  },
 });
