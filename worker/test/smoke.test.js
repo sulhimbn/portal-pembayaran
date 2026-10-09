@@ -13,18 +13,13 @@ test("GET /api/health ok", async () => {
   assert.equal(j.ok, true);
 });
 
-test("login placeholder + me", async () => {
-  const login = await worker.fetch(
-    makeReq("/api/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "a@b.id" }) }),
-    env,
-    {}
-  );
-  assert.equal(login.status, 200);
-  const setCookie = login.headers.get("set-cookie");
-  assert.ok(setCookie && setCookie.includes("portal_session="));
-  const me = await worker.fetch(makeReq("/api/auth/me", { headers: { cookie: setCookie.split(";")[0] } }), env, {});
-  const j = await me.json();
-  assert.equal(j.user.email, "a@b.id");
+test("guard tanpa DB: zona proteksi balas login_dulu", async () => {
+  for (const path of ["/api/client/summary", "/api/admin/summary"]) {
+    const res = await worker.fetch(makeReq(path), env, {});
+    assert.equal(res.status, 401);
+    const j = await res.json();
+    assert.equal(j.error, "login_dulu");
+  }
 });
 
 test("scheduled handler ada", () => {

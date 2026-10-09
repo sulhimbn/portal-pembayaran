@@ -9,29 +9,57 @@
   <body>
     <header class="topbar">
       <h1>Portal Pembayaran QRIS</h1>
-      <nav><span id="userBadge">Belum login (mode scaffold)</span></nav>
+      <nav>
+        <span id="userBadge">Memuat…</span>
+        <button id="logoutBtn" hidden>Keluar</button>
+      </nav>
     </header>
     <main>
-      <section class="card">
-        <h2>Masuk (placeholder T1)</h2>
+      <section class="card" id="authCard">
+        <h2>Masuk / Daftar</h2>
+        <div class="tabs">
+          <button id="tabLogin" class="tab active" type="button">Masuk</button>
+          <button id="tabRegister" class="tab" type="button">Daftar</button>
+        </div>
         <form id="loginForm">
-          <label>Email <input id="email" type="email" required placeholder="client@contoh.id" /></label>
+          <label>Email <input id="loginEmail" type="email" required placeholder="client@contoh.id" autocomplete="email" /></label>
+          <label>Kata sandi <input id="loginPassword" type="password" required minlength="8" placeholder="min. 8 karakter" autocomplete="current-password" /></label>
           <button type="submit">Masuk</button>
+          <p class="hint"><a href="#" id="forgotLink">Lupa kata sandi?</a></p>
         </form>
-        <p class="hint">T1: email apa pun diterima sebagai client dev. T3: password + role admin.</p>
+        <form id="registerForm" hidden>
+          <label>Email <input id="regEmail" type="email" required placeholder="client@contoh.id" autocomplete="email" /></label>
+          <label>Nama <input id="regName" type="text" placeholder="Nama lengkap" autocomplete="name" /></label>
+          <label>No. HP <input id="regPhone" type="tel" placeholder="08xx…" autocomplete="tel" /></label>
+          <label>Kata sandi <input id="regPassword" type="password" required minlength="8" placeholder="min. 8 karakter" autocomplete="new-password" /></label>
+          <button type="submit">Daftar sebagai client</button>
+        </form>
+        <form id="resetForm" hidden>
+          <p class="hint">Masukkan email, lalu tempel token reset yang diterima untuk membuat kata sandi baru.</p>
+          <label>Email <input id="resetEmail" type="email" required placeholder="client@contoh.id" /></label>
+          <button type="submit" id="resetReqBtn">Minta token reset</button>
+          <pre id="resetTokenOut" hidden></pre>
+          <label>Token <input id="resetToken" type="text" placeholder="token reset" /></label>
+          <label>Kata sandi baru <input id="resetPassword" type="password" minlength="8" placeholder="min. 8 karakter" autocomplete="new-password" /></label>
+          <button type="submit" id="resetConfirmBtn">Ganti kata sandi</button>
+          <p class="hint"><a href="#" id="backToLogin">← Kembali masuk</a></p>
+        </form>
+        <p class="hint" id="authMsg"></p>
+      </section>
+      <section class="card" id="clientCard" hidden>
+        <h2>Area Client</h2>
+        <p id="clientSummary">Memuat ringkasan…</p>
+        <p class="hint"><a href="/client/">Buka /client/</a> — T4: katalog, order, layanan.</p>
+      </section>
+      <section class="card" id="adminCard" hidden>
+        <h2>Area Admin</h2>
+        <p id="adminSummary">Memuat ringkasan…</p>
+        <p class="hint"><a href="/admin/">Buka /admin/</a> — T7: dashboard &amp; CRUD.</p>
       </section>
       <section class="card">
         <h2>Status API</h2>
         <button id="cekApi">Cek /api/health</button>
         <pre id="apiOut">- klik tombol untuk cek koneksi Worker -</pre>
-      </section>
-      <section class="card">
-        <h2>Berikutnya</h2>
-        <ul>
-          <li>T2: skema D1 penuh (users, products, orders, services, invoices, payments, audit)</li>
-          <li>T3: auth client+admin + proteksi rute</li>
-          <li>T5–T6: invoice + QRIS + webhook</li>
-        </ul>
       </section>
     </main>
     <script type="module" src="/src/main.js"></script>

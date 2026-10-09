@@ -4,7 +4,14 @@ body { margin: 0; }
 .topbar h1 { font-size: 18px; margin: 0; }
 main { max-width: 720px; margin: 24px auto; padding: 0 16px; display: grid; gap: 16px; }
 .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
+.topbar nav { display: flex; gap: 12px; align-items: center; }
 button { background: #111827; color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+button.tab { background: #e5e7eb; color: #111827; }
+button.tab.active { background: #111827; color: #fff; }
+.tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+form { display: grid; gap: 10px; }
+form label { display: grid; gap: 4px; }
+#logoutBtn { background: #374151; }
 input { padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; margin-left: 8px; }
 pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow: auto; }
 .hint { color: #6b7280; font-size: 13px; }

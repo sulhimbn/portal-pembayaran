@@ -1,73 +1,158 @@
-// Auth session placeholder (T1). T3: ganti ke users D1 + scrypt + session table + RBAC.
-// Endpoint: POST /api/auth/login {email} -> set cookie session HMAC (dev only).
-//           POST /api/auth/logout -> clear cookie. GET /api/auth/me -> baca session.
-import { json, COOKIE } from "../index.js";
+// Auth client+admin (T3): users D1 + PBKDF2 + session cookie berbasis DB + RBAC dasar.
+// Endpoint:
+//   POST /api/auth/register        {email, password, name?, phone?} -> user client + auto-login
+//   POST /api/auth/login           {email, password} -> session cookie
+//   POST /api/auth/logout          -> hapus session + clear cookie
+//   GET  /api/auth/me              -> user saat ini (null bila belum login)
+//   POST /api/auth/reset/request   {email} -> token reset (dasar: token dikembalikan di respons;
+//                                   produksi T10: kirim via email, JANGAN expose)
+//   POST /api/auth/reset/confirm   {token, password} -> ganti password + cabut semua session
+// Admin dibuat via SQL (lihat README): UPDATE users SET role='admin' WHERE email='...';
+// register SELALU membuat role client.
 
-const enc = new TextEncoder();
+import { json } from "../index.js";
+import { getSessionUser, publicUser, isEmail, audit, clientIp } from "../lib/auth.js";
+import { hashPassword, verifyPassword, iterationsFor } from "../lib/password.js";
+import { createSession, destroySession, getCookie, newToken, sha256Hex, isoIn, RESET_TTL_MS, sessionSetCookie, sessionClearCookie } from "../lib/session.js";
 
-async function hmac(secret, data) {
-  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(data));
-  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+const MIN_PASSWORD = 8;
+
+async function readJson(request) {
+  try {
+    return await request.json();
+  } catch {
+    return {};
+  }
 }
 
-function getCookie(request, name) {
-  const raw = request.headers.get("cookie") || "";
-  for (const part of raw.split(";")) {
-    const [k, ...v] = part.trim().split("=");
-    if (k === name) return decodeURIComponent(v.join("="));
-  }
+function needDb(env) {
+  if (!env.DB) return json({ ok: false, error: "db_belum_dikonfigurasi" }, 500);
   return null;
 }
 
 export async function handleAuth(request, env) {
   const url = new URL(request.url);
-  const secret = env.SESSION_SECRET || "dev-only-placeholder-secret-ganti-di-produksi";
-  const cookieName = COOKIE(env);
+  const path = url.pathname;
+  const dbErr = needDb(env);
+  if (dbErr) return dbErr;
 
-  if (request.method === "GET" && url.pathname === "/api/auth/me") {
-    const token = getCookie(request, cookieName);
-    if (!token) return json({ ok: true, user: null });
-    const [payloadB64, sig] = token.split(".");
-    if (!payloadB64 || !sig) return json({ ok: true, user: null });
-    let payload;
-    try {
-      payload = JSON.parse(atob(payloadB64));
-    } catch {
-      return json({ ok: true, user: null });
-    }
-    const expect = await hmac(secret, payloadB64);
-    if (expect !== sig) return json({ ok: true, user: null });
-    if (payload.exp < Date.now()) return json({ ok: true, user: null });
-    return json({ ok: true, user: { email: payload.email, role: payload.role || "client", placeholder: true } });
+  // ---- GET /api/auth/me ----
+  if (request.method === "GET" && path === "/api/auth/me") {
+    const user = await getSessionUser(request, env);
+    return json({ ok: true, user: publicUser(user) });
   }
 
-  if (request.method === "POST" && url.pathname === "/api/auth/login") {
-    let body = {};
-    try {
-      body = await request.json();
-    } catch {}
-    const email = String(body.email || "").trim();
-    if (!email || !email.includes("@")) return json({ ok: false, error: "email_tidak_valid" }, 400);
-    // T1: terima email apa pun sebagai client (dev). T3: verifikasi password + role admin.
-    const payloadB64 = btoa(JSON.stringify({ email, role: "client", exp: Date.now() + 7 * 864e5 }));
-    const sig = await hmac(secret, payloadB64);
-    const headers = {
-      "Set-Cookie": `${cookieName}=${encodeURIComponent(payloadB64 + "." + sig)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`,
-    };
-    return new Response(JSON.stringify({ ok: true, user: { email, role: "client", placeholder: true } }), {
-      status: 200,
-      headers: { "content-type": "application/json; charset=utf-8", ...headers },
+  // ---- POST /api/auth/register ----
+  if (request.method === "POST" && path === "/api/auth/register") {
+    const body = await readJson(request);
+    const email = String(body.email || "").trim().toLowerCase();
+    const password = String(body.password || "");
+    const name = String(body.name || "").trim().slice(0, 120);
+    const phone = String(body.phone || "").trim().slice(0, 40);
+    if (!isEmail(email)) return json({ ok: false, error: "email_tidak_valid" }, 400);
+    if (password.length < MIN_PASSWORD) return json({ ok: false, error: "password_min_8" }, 400);
+
+    const exists = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
+    if (exists) return json({ ok: false, error: "email_sudah_terdaftar" }, 409);
+
+    const passwordHash = await hashPassword(password, iterationsFor(env));
+    const now = new Date().toISOString();
+    const ins = await env.DB.prepare(
+      "INSERT INTO users (email, password_hash, name, phone, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'client', 'active', ?, ?)"
+    ).bind(email, passwordHash, name, phone, now, now).run();
+    const user = { id: ins.meta.last_row_id, email, name, phone, role: "client" };
+    await audit(env, { actor: user.id, action: "register", entity: "user", entityId: user.id, ip: clientIp(request) });
+
+    const { token } = await createSession(env, user.id, request);
+    return new Response(JSON.stringify({ ok: true, user: publicUser(user) }), {
+      status: 201,
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "Set-Cookie": sessionSetCookie(token, env, request),
+      },
     });
   }
 
-  if (request.method === "POST" && url.pathname === "/api/auth/logout") {
+  // ---- POST /api/auth/login ----
+  if (request.method === "POST" && path === "/api/auth/login") {
+    const body = await readJson(request);
+    const email = String(body.email || "").trim().toLowerCase();
+    const password = String(body.password || "");
+    if (!isEmail(email) || !password) return json({ ok: false, error: "email_atau_password_salah" }, 401);
+
+    const u = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
+    const passOk = u ? await verifyPassword(password, u.password_hash) : false;
+    if (!u || !passOk) {
+      await audit(env, { actor: u ? u.id : null, action: "login_gagal", entity: "user", meta: { email }, ip: clientIp(request) });
+      return json({ ok: false, error: "email_atau_password_salah" }, 401);
+    }
+    if (u.status !== "active") {
+      await audit(env, { actor: u.id, action: "login_ditolak_suspended", entity: "user", entityId: u.id, ip: clientIp(request) });
+      return json({ ok: false, error: "akun_disuspend" }, 403);
+    }
+    const user = { id: u.id, email: u.email, name: u.name, phone: u.phone, role: u.role };
+    await audit(env, { actor: u.id, action: "login", entity: "user", entityId: u.id, ip: clientIp(request) });
+    const { token } = await createSession(env, u.id, request);
+    return new Response(JSON.stringify({ ok: true, user: publicUser(user) }), {
+      status: 200,
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "Set-Cookie": sessionSetCookie(token, env, request),
+      },
+    });
+  }
+
+  // ---- POST /api/auth/logout ----
+  if (request.method === "POST" && path === "/api/auth/logout") {
+    const token = getCookie(request, env.SESSION_COOKIE || "portal_session");
+    await destroySession(env, token);
     return new Response(JSON.stringify({ ok: true }), {
       headers: {
         "content-type": "application/json; charset=utf-8",
-        "Set-Cookie": `${cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
+        "Set-Cookie": sessionClearCookie(env),
       },
     });
+  }
+
+  // ---- POST /api/auth/reset/request (dasar) ----
+  if (request.method === "POST" && path === "/api/auth/reset/request") {
+    const body = await readJson(request);
+    const email = String(body.email || "").trim().toLowerCase();
+    // Anti-enumerasi: selalu ok:true. Token hanya ada bila email terdaftar.
+    // Dasar (tanpa email infra): token dikembalikan di respons agar bisa diuji manual.
+    // T10: kirim token via email dan JANGAN sertakan di respons.
+    if (!isEmail(email)) return json({ ok: true });
+    const u = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
+    if (!u) return json({ ok: true });
+    const token = newToken();
+    const tokenHash = await sha256Hex("reset:" + token);
+    await env.DB.prepare("UPDATE users SET reset_token_hash = ?, reset_expires_at = ?, updated_at = ? WHERE id = ?")
+      .bind(tokenHash, isoIn(RESET_TTL_MS), new Date().toISOString(), u.id).run();
+    await audit(env, { actor: u.id, action: "reset_diminta", entity: "user", entityId: u.id, ip: clientIp(request) });
+    return json({ ok: true, reset_token: token, note: "dasar: token di respons (dev). Produksi: kirim via email." });
+  }
+
+  // ---- POST /api/auth/reset/confirm ----
+  if (request.method === "POST" && path === "/api/auth/reset/confirm") {
+    const body = await readJson(request);
+    const token = String(body.token || "");
+    const password = String(body.password || "");
+    if (!token) return json({ ok: false, error: "token_tidak_valid" }, 400);
+    if (password.length < MIN_PASSWORD) return json({ ok: false, error: "password_min_8" }, 400);
+    const tokenHash = await sha256Hex("reset:" + token);
+    const u = await env.DB.prepare("SELECT * FROM users WHERE reset_token_hash = ?").bind(tokenHash).first();
+    if (!u || !u.reset_expires_at || String(u.reset_expires_at) < new Date().toISOString()) {
+      return json({ ok: false, error: "token_tidak_valid_atau_kedaluwarsa" }, 400);
+    }
+    const passwordHash = await hashPassword(password, iterationsFor(env));
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      "UPDATE users SET password_hash = ?, reset_token_hash = NULL, reset_expires_at = NULL, updated_at = ? WHERE id = ?"
+    ).bind(passwordHash, now, u.id).run();
+    // Cabut semua session lama agar password baru berlaku penuh.
+    await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(u.id).run();
+    await audit(env, { actor: u.id, action: "reset_berhasil", entity: "user", entityId: u.id, ip: clientIp(request) });
+    return json({ ok: true });
   }
 
   return json({ ok: false, error: "not_found" }, 404);

@@ -10,13 +10,18 @@ Bahasa UI: Indonesia.
 
   wrangler.toml          Konfig Worker API + binding D1/R2 + Cron (akar repo)
   frontend/              Pages (Vite dev, proxy /api -> Worker :8787)
-    src/main.js          Login placeholder + cek /api/health
+    src/main.js          Login/register + guard tampilan client/admin (T3)
+    public/client/       Guard rute /client/* — wajib login (T3, diisi T4)
+    public/admin/        Guard rute /admin/* — wajib admin (T3, diisi T7)
     public/             Aset statis
   worker/                API (Workers, nodejs_compat)
-    src/index.js         Router + CORS + scheduled (cron) handler
+    src/index.js         Router + CORS + guard /client/* + /admin/* + scheduled (cron)
+    src/lib/password.js  Hash PBKDF2-SHA-256 + verify timing-safe (T3)
+    src/lib/session.js   Session cookie DB + token hash SHA-256 (T3)
+    src/lib/auth.js      requireUser/requireAdmin/ownership + audit (T3)
     src/routes/health.js GET /api/health (cek D1/R2)
-    src/routes/auth.js   Auth session placeholder (T1) -> DB di T3
-    test/                Smoke test node:test
+    src/routes/auth.js   Auth DB: register/login/logout/me/reset (T3)
+    test/                Smoke + auth RBAC test node:test (T3: 11 test)
   migrations/            Migrasi D1 (0001 placeholder T1, 0002 skema inti T2)
   seeds/                 Seed produk awal, idempotent (seed_products.sql)
 
@@ -87,13 +92,37 @@ Perintah:
   npm run db:products:local   # verifikasi seed terbaca
   npm run db:tables:local     # daftar tabel
 
+## Auth + RBAC (T3)
+
+Register/login client (PBKDF2-SHA-256, min 8 char), session cookie 7 hari
+berbasis DB (`sessions`, token disimpan sebagai hash SHA-256), role
+client/admin, reset password dasar (token 1 jam, session lama dicabut),
+guard backend `/api/client/*` (wajib login, query di-scope user_id) dan
+`/api/admin/*` (wajib admin: 401 anon, 403 client), audit login/register/reset.
+
+Admin dibuat via SQL (register SELALU client):
+
+  npx wrangler d1 execute DB --local --command="UPDATE users SET role='admin' WHERE email='anda@contoh.id';"
+
+Reset password di sini mode dasar (token dikembalikan di respons agar bisa
+diuji manual); produksi wajib kirim via email dan JANGAN expose token (T10).
+
+Uji manual RBAC:
+
+  1. Daftar 2 akun berbeda -> masing-masing `GET /api/client/summary`
+     hanya hitung miliknya.
+  2. Client `GET /api/admin/summary` -> 403 `admin_saja`; tanpa cookie -> 401.
+  3. `UPDATE users SET role='admin'` -> login ulang -> `/api/admin/summary` 200.
+  4. Reset: request -> confirm -> session lama mati, password baru jalan.
+
+Otomatis: `npm test --workspace=worker` (11 test: auth, RBAC, scoping, reset).
+
 ## Status scaffold (T1)
 
 - [x] Struktur folder + wrangler (D1/R2/Cron) + frontend Vite + proxy
-- [x] Auth session placeholder (cookie HMAC dev-only, tanpa DB)
 - [x] Cron handler terdaftar (logika invoice di T8)
 - [x] T2: skema D1 penuh + seed produk (0002 + seeds/seed_products.sql)
-- [ ] T3: auth DB + RBAC
+- [x] T3: auth DB + RBAC (PBKDF2 + session DB + guard /client /admin)
 
 ## Batas free-tier (ringkas)
 

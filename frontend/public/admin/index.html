@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Area Admin — Portal Pembayaran QRIS</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Area Admin</h1>
+      <nav><a href="/" style="color:#fff">← Beranda</a> <span id="badge"></span></nav>
+    </header>
+    <main>
+      <section class="card">
+        <h2>Panel admin</h2>
+        <pre id="out">Memeriksa sesi…</pre>
+      </section>
+    </main>
+    <script type="module">
+      // Guard rute /admin/*: wajib role admin (backend menolak dengan 401/403).
+      // T7 mengisi halaman ini dengan dashboard & CRUD.
+      const me = await (await fetch("/api/auth/me")).json();
+      if (!me.user) {
+        document.querySelector("#out").textContent = "Belum login — kembali ke / untuk masuk.";
+      } else if (me.user.role !== "admin") {
+        document.querySelector("#out").textContent = `Akses ditolak: ${me.user.email} bukan admin (backend juga menolak /api/admin/* dengan 403).`;
+      } else {
+        document.querySelector("#badge").textContent = `${me.user.email} (admin)`;
+        const r = await (await fetch("/api/admin/summary")).json();
+        document.querySelector("#out").textContent = JSON.stringify(r, null, 2);
+      }
+    </script>
+  </body>
+</html>
