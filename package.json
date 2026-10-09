@@ -1,0 +1,22 @@
+{
+  "name": "portal-pembayaran",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Portal client pembayaran QRIS + invoice — Cloudflare free-tier native (Pages + Workers + D1 + R2 + Cron)",
+  "workspaces": ["frontend", "worker"],
+  "scripts": {
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "dev:worker": "npm run dev --workspace=worker",
+    "dev": "concurrently -n web,api -c blue,green \"npm run dev:frontend\" \"npm run dev:worker\"",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces --if-present",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

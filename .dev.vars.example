@@ -1,0 +1,3 @@
+# Salin ke .dev.vars untuk dev lokal (JANGAN commit .dev.vars).
+SESSION_SECRET = "dev-min-32-char-ganti-sebelum-produksi-1234"
+QRIS_PROVIDER = "simulated"

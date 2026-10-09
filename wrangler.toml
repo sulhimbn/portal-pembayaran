@@ -1,0 +1,48 @@
+#:schema node_modules/wrangler/config-schema.json
+# Portal Pembayaran QRIS — Cloudflare free-tier native
+# Worker API + D1 + R2 + Cron. Frontend di-deploy via Pages (frontend/).
+name = "portal-pembayaran-api"
+main = "worker/src/index.js"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+workers_dev = true
+
+# ---- Static assets frontend (Pages alternative: serve via Pages project) ----
+# Jika ingin serve frontend dari Worker, uncomment:
+# [site]
+# bucket = "./frontend/dist"
+
+# ---- D1 (gratis 5GB, 5jt row read/hari) ----
+[[d1_databases]]
+binding = "DB"
+database_name = "portal-pembayaran-db"
+database_id = "placeholder-ganti-setelah-wrangler-d1-create"
+migrations_dir = "migrations"
+
+# ---- R2 (logo, bukti bayar, PDF invoice — 10GB gratis) ----
+[[r2_buckets]]
+binding = "ASSETS"
+bucket_name = "portal-pembayaran-assets"
+
+# ---- KV opsional untuk session cache (gratis 100k read/hari) ----
+# [[kv_namespaces]]
+# binding = "SESSIONS"
+# id = "placeholder"
+
+# ---- Cron: invoice berulang + reminder jatuh tempo (1x/hari cukup di free-tier) ----
+[triggers]
+crons = ["0 1 * * *"]
+
+# ---- Variabel non-rahasia ----
+[vars]
+APP_NAME = "Portal Pembayaran QRIS"
+APP_LOCALE = "id-ID"
+QRIS_PROVIDER = "simulated" # ganti: xendit | midtrans (butuh API key via secret)
+SESSION_COOKIE = "portal_session"
+
+# Secrets (JANGAN commit): set via `wrangler secret put`:
+# - SESSION_SECRET   (wajib, min 32 char)
+# - XENDIT_API_KEY   (jika QRIS_PROVIDER=xendit)
+# - MIDTRANS_SERVER_KEY (jika QRIS_PROVIDER=midtrans)
+# - ENCRYPTION_KEY   (untuk kolom kredensial WP client at-rest)

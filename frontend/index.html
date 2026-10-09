@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Portal Pembayaran QRIS</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Portal Pembayaran QRIS</h1>
+      <nav><span id="userBadge">Belum login (mode scaffold)</span></nav>
+    </header>
+    <main>
+      <section class="card">
+        <h2>Masuk (placeholder T1)</h2>
+        <form id="loginForm">
+          <label>Email <input id="email" type="email" required placeholder="client@contoh.id" /></label>
+          <button type="submit">Masuk</button>
+        </form>
+        <p class="hint">T1: email apa pun diterima sebagai client dev. T3: password + role admin.</p>
+      </section>
+      <section class="card">
+        <h2>Status API</h2>
+        <button id="cekApi">Cek /api/health</button>
+        <pre id="apiOut">- klik tombol untuk cek koneksi Worker -</pre>
+      </section>
+      <section class="card">
+        <h2>Berikutnya</h2>
+        <ul>
+          <li>T2: skema D1 penuh (users, products, orders, services, invoices, payments, audit)</li>
+          <li>T3: auth client+admin + proteksi rute</li>
+          <li>T5–T6: invoice + QRIS + webhook</li>
+        </ul>
+      </section>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
