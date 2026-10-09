@@ -1,3 +1,7 @@
 # Salin ke .dev.vars untuk dev lokal (JANGAN commit .dev.vars).
 SESSION_SECRET = "dev-min-32-char-ganti-sebelum-produksi-1234"
 QRIS_PROVIDER = "simulated"
+# T4: kunci enkripsi kredensial layanan (AES-GCM). Wajib di produksi via
+# `wrangler secret put ENCRYPTION_KEY`; tanpa ini dipakai fallback dev
+# (JANGAN untuk produksi).
+ENCRYPTION_KEY = "dev-min-32-char-ganti-sebelum-produksi-5678"

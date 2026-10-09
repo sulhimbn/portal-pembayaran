@@ -238,6 +238,56 @@ Manual/QA (admin saja, dipakai T9):
 Respons: `{ ok, dryRun, swept, issued[], skipped[], reminders[],
 remindedCount, summary }` — `summary` satu baris untuk wrangler logs.
 
+## Katalog + order + layanan client (T4)
+
+Engine: `worker/src/lib/catalog.js` (order pending + scoping miliknya) +
+`worker/src/lib/credentials.js` (kredensial WP AES-GCM at-rest via
+secret `ENCRYPTION_KEY`, tampil hanya masked — username `a•••p`,
+secret tak pernah tampil).
+
+API (auth session T3 — client: miliknya, anon 401, milik orang lain 403):
+
+  GET  /api/catalog                  katalog produk AKTIF (login wajib)
+  POST /api/client/orders {slug/productId, domain, requirements, qty, notes}
+                                     order website baru -> SELALU `pending`
+  GET  /api/client/orders[?status]   daftar order milik sendiri
+  GET  /api/client/orders/:id        detail order + layanan hasil approve (masked)
+  POST /api/client/orders/:id/cancel batal (miliknya; hanya pending/awaiting_payment)
+  GET  /api/client/services[?status] daftar layanan milik sendiri (MASKED)
+  GET  /api/client/services/:id      detail operasional: URL, wp-admin,
+                                     username termaskir, info serverless,
+                                     status, expire (MASKED + audit service.viewed)
+
+Aturan: order baru TIDAK membuat baris service — layanan muncul setelah
+admin approve (T7 menulis service terenkripsi; T4 hanya membaca). Approve/
+CRUD operasional milik T7 (`/api/admin/*`) — bukan di sini. Migrasi aditif:
+`migrations/0003_catalog_services.sql` (domain_requested, requirements,
+wp_username_masked, site_url, admin_url, serverless_info).
+
+Frontend: halaman `/client/` (katalog kartu + form order + tabel order
+dengan filter status + tombol batal + tabel layanan + panel detail),
+entry Vite `client` (build `dist/client/`); ditautkan dari beranda.
+
+Uji manual (D1 lokal, port 8899):
+
+  1. Anon `GET /api/catalog` -> 401; login -> 200 (hanya produk aktif).
+  2. `POST /api/client/orders {slug, domain, requirements}` ->
+     `pending`, `domain_requested` dinormalisasi lowercase.
+  3. `GET /api/client/services` -> `[]` (belum approve).
+  4. Tulis service terenkripsi (simulasi approve T7) ->
+     `services[0]` masked: `url`, `wp_admin_url`, `wp_username_masked`,
+     `has_wp_secret:true`, `serverless.info`, TANPA kolom `*_enc`.
+  5. Client lain `GET /services/1` -> 403; anon -> 401.
+
+Otomatis: `npm test --workspace=worker` (+7 test T4: katalog, order
+pending, validasi, scoping + batal, layanan masked pasca-approve,
+detail order, enkripsi roundtrip/gagal-kunci-beda).
+
+Untuk T7 (approve): tulis service dengan `encryptSecret()` dari
+`worker/src/lib/credentials.js` + isi `wp_username_masked` via
+`maskUsername()` — JANGAN simpan kredensial plaintext agar konsisten
+dengan masking T4.
+
 ## Status scaffold (T1)
 
 - [x] Struktur folder + wrangler (D1/R2/Cron) + frontend Vite + proxy
@@ -247,6 +297,7 @@ remindedCount, summary }` — `summary` satu baris untuk wrangler logs.
 - [x] T5: invoice engine + cetak/PDF (lib + /api/invoices + /invoices/)
 - [x] T6: QRIS Xendit/Midtrans + webhook auto-lunas + halaman bayar (payments.js + /api/payments + /api/webhooks/* + /:id/pay + 12 test)
 - [x] T8: cron invoice berulang + reminder + audit (recurring.js + scheduled + /cron-run + 12 test)
+- [x] T4: katalog + order pending + layanan masked + detail operasional (catalog.js + credentials.js + /api/catalog + /api/client/orders|services + /client/ + 7 test)
 
 ## Batas free-tier (ringkas)
 

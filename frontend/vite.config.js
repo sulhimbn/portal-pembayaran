@@ -16,11 +16,12 @@ export default defineConfig({
   preview: { port: 4173 },
   build: {
     rollupOptions: {
-      // Multipage: beranda + halaman invoice client (T5).
-      // T4 (/client/) dan T7 (/admin/) menambah entry di sini.
+      // Multipage: beranda + invoice client (T5) + area client katalog/order/layanan (T4).
+      // T7 (/admin/) menambah entry di sini.
       input: {
         main: resolve(root, "index.html"),
         invoices: resolve(root, "invoices/index.html"),
+        client: resolve(root, "client/index.html"),
       },
     },
   },

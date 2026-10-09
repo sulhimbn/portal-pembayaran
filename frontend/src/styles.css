@@ -26,3 +26,23 @@ select { padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; }
 .pill.paid { background: #065f46; }
 .pill.overdue { background: #b91c1c; }
 .pill.cancelled { background: #6b7280; }
+/* T4: halaman /client/ — katalog, order, layanan */
+main.wide { max-width: 960px; }
+.grid { display: grid; gap: 12px; }
+@media (min-width: 640px) { .grid { grid-template-columns: 1fr 1fr; } }
+.produk { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; }
+.produk h3 { margin: 0 0 4px; font-size: 16px; }
+.produk .harga { font-weight: 700; margin: 4px 0; }
+.produk .desk { color: #4b5563; font-size: 13px; }
+.produk ul { font-size: 13px; color: #374151; padding-left: 18px; margin: 8px 0; }
+textarea { padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; margin-left: 8px; font: inherit; }
+dl.detail { display: grid; grid-template-columns: 160px 1fr; gap: 6px 12px; font-size: 14px; margin: 0; }
+dl.detail dt { color: #6b7280; }
+dl.detail dd { margin: 0; overflow-wrap: anywhere; }
+.pill.order-pending, .pill.svc-pending { background: #92400e; }
+.pill.order-awaiting_payment { background: #b45309; }
+.pill.order-paid, .pill.svc-active { background: #065f46; }
+.pill.order-processing { background: #1d4ed8; }
+.pill.order-completed { background: #0e7490; }
+.pill.order-cancelled, .pill.svc-expired { background: #6b7280; }
+.pill.svc-suspended { background: #b91c1c; }

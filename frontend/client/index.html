@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Area Client — Portal Pembayaran QRIS</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Area Client</h1>
+      <nav><a href="/" style="color:#fff">← Beranda</a> <span id="badge"></span></nav>
+    </header>
+    <main class="wide">
+      <section class="card" id="guardCard">
+        <p id="guardMsg">Memeriksa sesi…</p>
+      </section>
+
+      <section class="card" id="katalogCard" hidden>
+        <h2>Katalog Paket</h2>
+        <p class="hint">Pilih paket, lalu klik “Pesan” untuk mengisi form order otomatis.</p>
+        <div id="katalog" class="grid"><p>Memuat…</p></div>
+      </section>
+
+      <section class="card" id="orderFormCard" hidden>
+        <h2>Order Website Baru</h2>
+        <form id="orderForm">
+          <label>Paket
+            <select id="fPaket" required></select>
+          </label>
+          <label>Domain yang diinginkan (opsional)
+            <input id="fDomain" type="text" placeholder="tokosaya.com" autocomplete="off" />
+          </label>
+          <label>Kebutuhan
+            <textarea id="fKebutuhan" rows="3" placeholder="Contoh: company profile 5 halaman, warna biru, ada blog…"></textarea>
+          </label>
+          <label>Qty
+            <input id="fQty" type="number" min="1" max="100" value="1" />
+          </label>
+          <label>Catatan (opsional)
+            <input id="fCatatan" type="text" placeholder="Catatan tambahan…" autocomplete="off" />
+          </label>
+          <button type="submit">Kirim order</button>
+        </form>
+        <p class="hint" id="orderMsg"></p>
+      </section>
+
+      <section class="card" id="orderListCard" hidden>
+        <h2>Order Saya</h2>
+        <label>Status
+          <select id="orderFilter">
+            <option value="">Semua</option>
+            <option value="pending">Menunggu verifikasi</option>
+            <option value="awaiting_payment">Menunggu bayar</option>
+            <option value="paid">Dibayar</option>
+            <option value="processing">Diproses</option>
+            <option value="completed">Selesai</option>
+            <option value="cancelled">Dibatalkan</option>
+          </select>
+        </label>
+        <div id="orderList"><p>Memuat…</p></div>
+      </section>
+
+      <section class="card" id="layananCard" hidden>
+        <h2>Layanan Saya</h2>
+        <p class="hint">Layanan muncul setelah admin menyetujui order. Kredensial login ditampilkan termaskir demi keamanan.</p>
+        <div id="layananList"><p>Memuat…</p></div>
+      </section>
+
+      <section class="card" id="layananDetailCard" hidden>
+        <h2>Detail Layanan</h2>
+        <div id="layananDetail"></div>
+        <p><button id="tutupDetail" type="button">Tutup detail</button></p>
+      </section>
+    </main>
+    <script type="module" src="/src/client.js"></script>
+  </body>
+</html>
