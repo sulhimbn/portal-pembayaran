@@ -17,7 +17,8 @@ Bahasa UI: Indonesia.
     src/routes/health.js GET /api/health (cek D1/R2)
     src/routes/auth.js   Auth session placeholder (T1) -> DB di T3
     test/                Smoke test node:test
-  migrations/            Migrasi D1 (T1 placeholder, T2 skema penuh)
+  migrations/            Migrasi D1 (0001 placeholder T1, 0002 skema inti T2)
+  seeds/                 Seed produk awal, idempotent (seed_products.sql)
 
 ## Prasyarat
 
@@ -52,12 +53,46 @@ Cek cepat tanpa wrangler:
 
 Secrets lain (T6): XENDIT_API_KEY atau MIDTRANS_SERVER_KEY, ENCRYPTION_KEY.
 
+## Skema D1 (T2)
+
+Migrasi `migrations/0002_schema_core.sql` (0001 hanya placeholder T1).
+Seed: `seeds/seed_products.sql` — 3 produk awal, idempotent (INSERT OR IGNORE).
+
+Konvensi: uang = INTEGER rupiah (tanpa float); waktu = TEXT ISO-8601 UTC.
+Kredensial WP client di `services` disimpan terenkripsi at-rest
+(kolom `*_enc`, kunci via secret ENCRYPTION_KEY), bukan plaintext.
+
+Diagram relasi:
+
+  users --1:*-- orders --*:1-- products
+   |              |
+   |              +--1:*-- services --*:1-- products
+   |              |             |
+   +--1:*-- invoices --*:1------+
+   |      |  |
+   |      |  +--1:*-- payments
+   |      +--1:*-- invoice_items
+   |
+   +--1:*-- sessions
+   +--1:*-- audit_logs (sebagai actor)
+
+Tabel: users, products, orders, services, invoices, invoice_items,
+payments, sessions, audit_logs. `invoice_items`/`sessions` tabel
+pendukung untuk T5 (rincian total) dan T3 (session DB).
+
+Perintah:
+
+  npm run db:migrate:local    # apply migrasi ke D1 lokal
+  npm run db:seed:local       # seed 3 produk awal
+  npm run db:products:local   # verifikasi seed terbaca
+  npm run db:tables:local     # daftar tabel
+
 ## Status scaffold (T1)
 
 - [x] Struktur folder + wrangler (D1/R2/Cron) + frontend Vite + proxy
 - [x] Auth session placeholder (cookie HMAC dev-only, tanpa DB)
 - [x] Cron handler terdaftar (logika invoice di T8)
-- [ ] T2: skema D1 penuh + seed produk
+- [x] T2: skema D1 penuh + seed produk (0002 + seeds/seed_products.sql)
 - [ ] T3: auth DB + RBAC
 
 ## Batas free-tier (ringkas)
