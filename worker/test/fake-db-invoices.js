@@ -15,7 +15,9 @@ export class InvoiceFakeDB {
     this.invoices = [];
     this.invoice_items = [];
     this.audit_logs = [];
-    this._seq = { user: 1, product: 1, order: 1, service: 1, invoice: 1, item: 1, audit: 1 };
+    this.payments = [];
+    this.webhook_events = [];
+    this._seq = { user: 1, product: 1, order: 1, service: 1, invoice: 1, item: 1, audit: 1, payment: 1, webhook: 1 };
   }
 
   addUser({ email, name = "User", role = "client", status = "active" }) {
@@ -138,6 +140,32 @@ export class InvoiceFakeDB {
       const u = this.users.find((x) => x.id === p[0]);
       return u ? { name: u.name, email: u.email } : null;
     }
+    // payment by provider_ref (T6)
+    if (low.includes("from payments where provider_ref =")) {
+      return this.payments.find((r) => r.provider_ref === p[0]) || null;
+    }
+    // payment by id (T6)
+    if (low.includes("from payments where id =")) {
+      const row = this.payments.find((r) => r.id === p[0]);
+      if (!row) return null;
+      if (low.includes("raw_callback_json") && !low.includes(",")) return { raw_callback_json: row.raw_callback_json };
+      return row;
+    }
+    // latest payment per invoice (T6: ORDER BY id DESC)
+    if (low.includes("from payments where invoice_id =")) {
+      const rows = this.payments.filter((r) => r.invoice_id === p[0]).sort((a, b) => b.id - a.id);
+      return rows[0] || null;
+    }
+    // payment lookup ringan: invoice_id + user_id by ref (T6 simulate)
+    if (low.includes("select invoice_id, user_id from payments where provider_ref")) {
+      const row = this.payments.find((r) => r.provider_ref === p[0]);
+      return row ? { invoice_id: row.invoice_id, user_id: row.user_id } : null;
+    }
+    // order by id ringan (T6 settle: update status paid)
+    if (low.includes("select id, status, user_id from orders where id")) {
+      const o = this.orders.find((x) => x.id === p[0]);
+      return o ? { id: o.id, status: o.status, user_id: o.user_id } : null;
+    }
     // session lookup (T3)
     if (low.includes("from sessions where token_hash")) {
       return this.sessions.find((s) => s.token_hash === p[0]) || null;
@@ -148,17 +176,86 @@ export class InvoiceFakeDB {
       if (!u) return null;
       return { id: u.id, email: u.email, name: u.name, phone: u.phone, role: u.role, status: u.status };
     }
+    // order by id (renewal candidates)
+    if (low.includes("from orders where id = ?")) {
+      return this.orders.find((x) => x.id === p[0]) || null;
+    }
+    // product by id
+    if (low.includes("from products where id = ?")) {
+      return this.products.find((x) => x.id === p[0]) || null;
+    }
+    // reminder audit hari ini (invoice.reminder + created_at >= ?)
+    if (low.includes("from audit_logs where action = 'invoice.reminder'")) {
+      const dayStart = String(p[0] || "");
+      const rows = this.audit_logs.filter(
+        (r) => r.action === "invoice.reminder" && String(r.created_at) >= dayStart
+      );
+      return rows[0] || null;
+    }
     // COUNT global (admin summary T3) — abaikan di sini
     return null;
   }
 
   _all(low, p) {
+    // renewal candidates: paid langganan + JOIN (1 baris per invoice lunas)
+    if (low.includes("from invoices i left join orders")) {
+      const limit = Number(p[0]) || 200;
+      const rows = this.invoices
+        .filter((r) => ["monthly", "yearly"].includes(r.billing_period) && r.status === "paid" && r.order_id != null)
+        .sort((a, b) => a.id - b.id)
+        .slice(0, limit)
+        .map((r) => {
+          const o = this.orders.find((x) => x.id === r.order_id);
+          const pr = o ? this.products.find((x) => x.id === o.product_id) : null;
+          return {
+            id: r.id, number: r.number, order_id: r.order_id, service_id: r.service_id,
+            user_id: r.user_id, billing_period: r.billing_period, issued_at: r.issued_at,
+            order_status: o ? o.status : null, order_qty: o ? o.qty : 1,
+            product_name: pr ? pr.name : "Langganan", product_price: pr ? pr.price_idr : 0,
+          };
+        });
+      return { results: rows };
+    }
+    // order terbuka (unpaid/overdue) — DISTINCT anti-duplikat
+    if (low.includes("select distinct order_id from invoices")) {
+      const seen = new Set();
+      for (const r of this.invoices) {
+        if (["unpaid", "overdue"].includes(r.status) && r.order_id != null) seen.add(Number(r.order_id));
+      }
+      return { results: [...seen].map((order_id) => ({ order_id })) };
+    }
+    // kandidat overdue (dry-run count): id saja
+    if (low.startsWith("select id from invoices where status = 'unpaid'")) {
+      const cmp = String(p[0] || "");
+      const rows = this.invoices.filter((r) => r.status === "unpaid" && r.due_at < cmp);
+      return { results: rows.map((r) => ({ id: r.id })) };
+    }
+    // reminder: invoice belum lunas, jatuh tempo <= horizon
+    if (low.includes("from invoices where status in ('unpaid','overdue')")) {
+      const horizon = String(p[0] || "");
+      const limit = Number(p[1]) || 200;
+      const rows = this.invoices
+        .filter((r) => ["unpaid", "overdue"].includes(r.status) && r.due_at <= horizon)
+        .sort((a, b) => (a.due_at < b.due_at ? -1 : 1))
+        .slice(0, limit)
+        .map((r) => ({ id: r.id, number: r.number, user_id: r.user_id, total_idr: r.total_idr, status: r.status, due_at: r.due_at }));
+      return { results: rows };
+    }
+    // reminder-tercatat hari ini (entity_id saja)
+    if (low.includes("select entity_id from audit_logs")) {
+      const dayStart = String(p[0] || "");
+      const rows = this.audit_logs.filter(
+        (r) => r.action === "invoice.reminder" && String(r.created_at) >= dayStart
+      );
+      return { results: rows.map((r) => ({ entity_id: r.entity_id })) };
+    }
     // items list
     if (low.includes("from invoice_items where invoice_id")) {
       const rows = this.invoice_items.filter((r) => r.invoice_id === p[0]).sort((a, b) => a.id - b.id);
       return { results: rows };
     }
-    // audit history list
+    // audit history list (T6: entity payment juga dipakai settlePayment via auditPayment;
+    // history invoice tetap difilter entity=invoice agar T5 tak berubah)
     if (low.includes("from audit_logs where entity")) {
       const limit = Number(p[1]) || 50;
       const rows = this.audit_logs
@@ -245,6 +342,63 @@ export class InvoiceFakeDB {
         }
       }
       return { success: true, meta: { changes } };
+    }
+    // INSERT payments (T6: 10 kolom)
+    if (low.startsWith("insert into payments")) {
+      const [invoice_id, user_id, provider, provider_ref, qr_payload, amount_idr, fee_idr, status, expires_at, raw_callback_json] = p;
+      if (provider_ref && this.payments.some((r) => r.provider_ref === provider_ref)) {
+        throw new Error("UNIQUE constraint failed: payments.provider_ref");
+      }
+      const id = this._seq.payment++;
+      const now = new Date().toISOString();
+      this.payments.push({
+        id, invoice_id, user_id, provider, provider_ref, qr_payload, amount_idr, fee_idr,
+        status, expires_at, paid_at: null, raw_callback_json,
+        created_at: now, updated_at: now,
+      });
+      return { success: true, meta: { last_row_id: id } };
+    }
+    // INSERT webhook_events (T6 idempotency: UNIQUE provider+event_id)
+    if (low.startsWith("insert into webhook_events")) {
+      const [provider, event_id, payment_ref, raw_json] = p;
+      if (this.webhook_events.some((r) => r.provider === provider && r.event_id === event_id)) {
+        throw new Error("UNIQUE constraint failed: webhook_events.provider, webhook_events.event_id");
+      }
+      const id = this._seq.webhook++;
+      this.webhook_events.push({ id, provider, event_id, payment_ref, raw_json, created_at: new Date().toISOString() });
+      return { success: true, meta: { last_row_id: id } };
+    }
+    // UPDATE payments -> paid/expired/failed (T6 settle)
+    if (low.startsWith("update payments set status = ?")) {
+      const [to, paid_at, raw, updated_at, id] = p;
+      const r = this.payments.find((x) => x.id === id);
+      if (r) {
+        r.status = to;
+        r.paid_at = paid_at;
+        r.raw_callback_json = raw;
+        r.updated_at = updated_at;
+      }
+      return { success: true, meta: { changes: r ? 1 : 0 } };
+    }
+    // UPDATE payments kedaluwarsa saat dibaca (T6 GET status)
+    if (low.startsWith("update payments set status = ?, updated_at = ?")) {
+      const [to, updated_at, id] = p;
+      const r = this.payments.find((x) => x.id === id);
+      if (r) {
+        r.status = to;
+        r.updated_at = updated_at;
+      }
+      return { success: true, meta: { changes: r ? 1 : 0 } };
+    }
+    // UPDATE orders -> paid (T6 settle auto-lunas order)
+    if (low.startsWith("update orders set status = ?")) {
+      const [to, updated_at, id] = p;
+      const o = this.orders.find((x) => x.id === id);
+      if (o) {
+        o.status = to;
+        o.updated_at = updated_at;
+      }
+      return { success: true, meta: { changes: o ? 1 : 0 } };
     }
     // sessions insert (loginAs langsung, tak lewat SQL) + DELETE expired (T3) — no-op aman
     if (low.startsWith("delete from sessions")) {
