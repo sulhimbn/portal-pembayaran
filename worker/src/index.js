@@ -10,6 +10,8 @@ import { handleHealth } from "./routes/health.js";
 import { handleInvoices } from "./routes/invoices.js";
 import { handlePayments } from "./routes/payments.js";
 import { handleCatalog } from "./routes/catalog.js";
+import { handleAdminPanel } from "./routes/admin.js";
+import { adminSummary } from "./lib/admin.js";
 import { requireUser, requireAdmin } from "./lib/auth.js";
 import { runRecurringCron } from "./lib/recurring.js";
 
@@ -115,6 +117,11 @@ async function handleAdmin(request, env, pathname) {
   const { user, response } = await requireAdmin(request, env);
   if (response) return response;
 
+  // T7 (WS4): semua /api/admin/* selain summary lama -> panel admin
+  // (routes/admin.js, caller = admin terverif; tak dikenal -> 404 sama).
+  if (!(request.method === "GET" && pathname === "/api/admin/summary")) {
+    return handleAdminPanel(request, env, pathname, user);
+  }
   // GET /api/admin/summary — angka global (bukti admin guard T3).
   // T7 mengembangkan dashboard/CRUD di bawah prefix ini.
   if (request.method === "GET" && pathname === "/api/admin/summary") {
@@ -126,6 +133,13 @@ async function handleAdmin(request, env, pathname) {
         return 0;
       }
     };
+    // T7: sertakan dashboard penuh (kompatibel: bentuk lama totals tetap ada).
+    let dashboard = null;
+    try {
+      dashboard = await adminSummary(env.DB);
+    } catch {
+      dashboard = null;
+    }
     return json({
       ok: true,
       admin: user.email,
@@ -134,6 +148,7 @@ async function handleAdmin(request, env, pathname) {
         orders: await total("orders"),
         invoices: await total("invoices"),
       },
+      dashboard,
     });
   }
 

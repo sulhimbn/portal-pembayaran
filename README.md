@@ -11,8 +11,9 @@ Bahasa UI: Indonesia.
   wrangler.toml          Konfig Worker API + binding D1/R2 + Cron (akar repo)
   frontend/              Pages (Vite dev, proxy /api -> Worker :8787)
     src/main.js          Login/register + guard tampilan client/admin (T3)
-    public/client/       Guard rute /client/* — wajib login (T3, diisi T4)
-    public/admin/        Guard rute /admin/* — wajib admin (T3, diisi T7)
+    admin/               Panel admin: dashboard, antrean approve, CRUD (T7)
+    src/admin.js         Logika panel admin (T7)
+    client/              Area client: katalog, order, layanan masked (T4)
     public/             Aset statis
   worker/                API (Workers, nodejs_compat)
     src/index.js         Router + CORS + guard /client/* + /admin/* + scheduled (cron)

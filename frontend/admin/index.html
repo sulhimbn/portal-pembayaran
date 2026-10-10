@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Panel Admin — Portal Pembayaran QRIS</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Panel Admin</h1>
+      <nav><a href="/" style="color:#fff">← Beranda</a> <span id="badge"></span></nav>
+    </header>
+    <main class="wide">
+      <section class="card" id="guardCard">
+        <p id="guardMsg">Memeriksa sesi…</p>
+      </section>
+
+      <section class="card" data-need-admin hidden>
+        <h2>Ringkasan</h2>
+        <div id="ringkasan" class="grid"><p>Memuat…</p></div>
+      </section>
+
+      <section class="card" data-need-admin hidden>
+        <h2>Antrean Approve Order</h2>
+        <p class="hint">Setujui order pending menjadi layanan aktif + isi URL dan login WP.</p>
+        <div id="antrean"><p>Memuat…</p></div>
+      </section>
+
+      <section class="card" id="approveCard" hidden>
+        <h2>Setujui Order → Layanan Aktif</h2>
+        <p id="approveInfo"></p>
+        <form id="approveForm">
+          <label>URL website
+            <input id="aSite" type="url" placeholder="https://berita-client.com" required />
+          </label>
+          <label>URL wp-admin
+            <input id="aAdminUrl" type="url" placeholder="https://berita-client.com/wp-admin" />
+          </label>
+          <label>Username WP
+            <input id="aWpUser" type="text" autocomplete="off" placeholder="admin-client" />
+          </label>
+          <label>Password WP (disimpan terenkripsi, tampil termaskir)
+            <input id="aWpSecret" type="password" autocomplete="new-password" />
+          </label>
+          <label>Info serverless (bila bukan WordPress)
+            <textarea id="aServerless" rows="2" placeholder="Contoh: worker name, KV id, catatan deploy…"></textarea>
+          </label>
+          <label>Status awal
+            <select id="aStatus">
+              <option value="active">Aktif</option>
+              <option value="pending">Menunggu</option>
+              <option value="suspended">Ditangguhkan</option>
+            </select>
+          </label>
+          <label>Kedaluwarsa
+            <input id="aExpire" type="date" />
+          </label>
+          <button type="submit">Buat layanan aktif</button>
+          <button id="tutupApprove" type="button">Batal</button>
+        </form>
+        <p class="hint" id="approveMsg"></p>
+      </section>
+
+      <section class="card" data-need-admin hidden>
+        <h2>Layanan Terbaru</h2>
+        <div id="layananBaru"><p>Memuat…</p></div>
+      </section>
+
+      <section class="card" data-need-admin hidden>
+        <h2>Invoice Belum Bayar</h2>
+        <div id="invoiceBaru"><p>Memuat…</p></div>
+      </section>
+
+      <section class="card" data-need-admin hidden>
+        <h2>Pembayaran Terbaru</h2>
+        <div id="bayarBaru"><p>Memuat…</p></div>
+        <p class="hint">CRUD lengkap client, order, layanan, invoice, pembayaran, dan produk-harga tersedia via API /api/admin/*. Verifikasi manual invoice via endpoint pay/cancel.</p>
+      </section>
+    </main>
+    <script type="module" src="/src/admin.js"></script>
+  </body>
+</html>
