@@ -17,7 +17,7 @@ workers_dev = true
 [[d1_databases]]
 binding = "DB"
 database_name = "portal-pembayaran-db"
-database_id = "placeholder-ganti-setelah-wrangler-d1-create"
+database_id = "48151ca6-b960-4144-b379-6c11571c1bcb"
 migrations_dir = "migrations"
 
 # ---- R2 (logo, bukti bayar, PDF invoice — 10GB gratis) ----

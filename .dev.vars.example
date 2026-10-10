@@ -1,7 +1,14 @@
-# Salin ke .dev.vars untuk dev lokal (JANGAN commit .dev.vars).
+# Salin ke .dev.vars untuk `wrangler dev --local` (JANGAN commit .dev.vars).
+# Format: KEY = "value" (sama seperti .env.local).
+# Produksi: JANGAN pakai file ini — set via `wrangler secret put <NAMA>`.
 SESSION_SECRET = "dev-min-32-char-ganti-sebelum-produksi-1234"
 QRIS_PROVIDER = "simulated"
-# T4: kunci enkripsi kredensial layanan (AES-GCM). Wajib di produksi via
+# Kunci enkripsi kredensial layanan (AES-GCM). Wajib di produksi via
 # `wrangler secret put ENCRYPTION_KEY`; tanpa ini dipakai fallback dev
 # (JANGAN untuk produksi).
 ENCRYPTION_KEY = "dev-min-32-char-ganti-sebelum-produksi-5678"
+# WEBHOOK_SECRET = "isi-bila-uji-webhook-sandbox"
+# XENDIT_API_KEY = "xnd_development_..."
+# XENDIT_WEBHOOK_TOKEN = "isi-dari-dashboard-xendit"
+# MIDTRANS_SERVER_KEY = "SB-Mid-server-..."
+# MIDTRANS_CLIENT_KEY = "SB-Mid-client-..."

@@ -3,8 +3,10 @@ frontend/dist/
 worker/dist/
 .wrangler/
 .dev.vars
+!.dev.vars.example
 .env
 .env.*
+!.env.example
 *.log
 coverage/
 *.sqlite
